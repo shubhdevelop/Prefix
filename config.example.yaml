@@ -1,0 +1,7 @@
+dump_directory: "/Users/shubham/Desktop"
+
+destinations:
+  - path: "/Users/shubham/Desktop/Screenshots"
+    prefix: "Screenshot"
+  - path: "/Users/shubham/Desktop/Screenshots"
+    prefix: "Screen Recording"
