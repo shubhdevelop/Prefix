@@ -30,19 +30,31 @@ func loadConfig() (*Config, error) {
 	home, err := os.UserHomeDir()
 	configFileName := filepath.Join(home, filename)
 	if err != nil {
-		fmt.Printf("could not get home directory: %v\n", err)
+		log.Printf("could not get home directory: %v\n", err)
 		return nil, err
 	}
 
 	file, err := os.Open(configFileName)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			fmt.Printf("File not found: %s\n", configFileName)
+			log.Printf("File not found: %s\n", configFileName)
+			log.Printf("Creating a new config file, add the dump and destinations")
 			// Handle file not existing (e.g., create it, exit)
-			return nil, err
+			newConfigFile, err := os.Create(configFileName)
+			if err != nil {
+				log.Fatalf("Error create new config file %e:", err)
+				return nil, err
+			}
+
+			defer func() {
+				closeErr := newConfigFile.Close()
+				if err == nil {
+					err = closeErr 
+				}
+			}()
 		} else {
 			// Handle other potential errors (e.g., permission denied)
-			fmt.Printf("Error opening file: %v\n", err)
+			log.Fatalf("Error opening file: %v\n", err)
 			return nil, err
 		}
 	}
@@ -52,15 +64,18 @@ func loadConfig() (*Config, error) {
 			err = closeErr // Capture close error if no other error occurred
 		}
 	}()
-	fmt.Printf("File exists and opened successfully: %s\n", configFileName)
+
+	log.Printf("File exists and opened successfully: %s\n", configFileName)
 
 	data, err := os.ReadFile(configFileName)
 	if err != nil {
+		log.Printf("failed to read config file: %v", err)
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Printf("failed to parse YAML: %v", err)
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
@@ -85,10 +100,13 @@ func moveFile(sourcePath, destPath string) error {
 	// make sure destination directory exists
 	destDir := filepath.Dir(destPath)
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		log.Printf("failed to create destination directory: %v", err)
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	if _, err := os.Stat(destPath); err == nil {
+		log.Printf("destination file already exists: %s", destPath)
+		log.Printf("destination file already exists: %s", destPath)
 		return fmt.Errorf("destination file already exists: %s", destPath)
 	}
 
@@ -97,10 +115,12 @@ func moveFile(sourcePath, destPath string) error {
 	}
 
 	if err := copyFile(sourcePath, destPath); err != nil {
+		log.Printf("failed to copy file: %v", err)
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
 	if err := os.Remove(sourcePath); err != nil {
+		log.Printf("failed to remove source file: %v", err)
 		return fmt.Errorf("failed to remove source file: %w", err)
 	}
 
@@ -110,22 +130,26 @@ func moveFile(sourcePath, destPath string) error {
 func copyFile(sourcePath, destPath string) error {
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
-		return err
+		log.Printf("failed to open source file: %v", err)
+		return fmt.Errorf("failed to open source file: %w", err)
 	}
 	defer func() {
 		closeErr := sourceFile.Close()
 		if err == nil {
-			err = closeErr // Capture close error if no other error occurred
+			log.Printf("failed to close source file: %v", err)
+			err = closeErr
 		}
 	}()
 	destFile, err := os.Create(destPath)
 	if err != nil {
-		return err
+		log.Printf("failed to create destination file: %v", err)
+		return fmt.Errorf("failed to create destination file: %w", err)
 	}
 	defer func() {
 		closeErr := destFile.Close()
 		if err == nil {
-			err = closeErr // Capture close error if no other error occurred
+			log.Printf("failed to close destination file: %v", err)
+			err = closeErr
 		}
 	}()
 
@@ -134,9 +158,10 @@ func copyFile(sourcePath, destPath string) error {
 	}
 
 	// Copy file permissions
-	sourceInfo, err := os.Stat(sourcePath)
+	sourceInfo, err :=	 os.Stat(sourcePath)
 	if err != nil {
-		return err
+		log.Printf("failed to stat source file: %v", err)
+		return fmt.Errorf("failed to stat source file: %w", err)
 	}
 	return os.Chmod(destPath, sourceInfo.Mode())
 }
@@ -144,6 +169,7 @@ func copyFile(sourcePath, destPath string) error {
 func organizeFiles(config *Config) error {
 	files, err := os.ReadDir(config.DumpDirectory)
 	if err != nil {
+		log.Printf("failed to read dump directory: %v", err)
 		return fmt.Errorf("failed to read dump directory: %w", err)
 	}
 
@@ -190,6 +216,20 @@ func organizeFiles(config *Config) error {
 var timer *time.Timer
 
 func main() {
+	logFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer logFile.Close()
+
+	log.SetOutput(logFile)
+
+	// 3. Optional: Customize the log format (Date, Time, File name).
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// Now all log.Println calls go to app.log instead of the console.
+	log.Println("This message is written to the log file.")
 	config, err := loadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -217,22 +257,20 @@ func main() {
 				if !ok {
 					return
 				}
-				// Log everything to see what your editor is actually doing
+
 				log.Println(event)
-				// 2. DEBOUNCING LOGIC:
-				// If a timer is already running, stop it so we can restart the 5s countdown.
+				// DEBOUNCING LOGIC:
 				if timer != nil {
 					timer.Stop()
 				}
 
-				// 3. Start (or restart) the timer.
 				// AfterFunc runs in its own goroutine automatically.
 				timer = time.AfterFunc(5*time.Second, func() {
 					log.Println("Timer expired, organizing files...")
 					// Note: organizeFiles must be a function call inside this closure
 					err := organizeFiles(config)
 					if err != nil {
-						fmt.Println(err)
+						log.Println(err)
 					}
 				})
 
@@ -247,7 +285,7 @@ func main() {
 
 	err = watcher.Add(config.DumpDirectory)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 	select {}
 }
