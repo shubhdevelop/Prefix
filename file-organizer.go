@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -35,35 +37,36 @@ func loadConfig() (*Config, error) {
 	}
 
 	file, err := os.Open(configFileName)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			log.Printf("File not found: %s\n", configFileName)
-			log.Printf("Creating a new config file, add the dump and destinations")
-			// Handle file not existing (e.g., create it, exit)
-			newConfigFile, err := os.Create(configFileName)
-			if err != nil {
-				log.Fatalf("Error create new config file %e:", err)
-				return nil, err
-			}
-
-			defer func() {
-				closeErr := newConfigFile.Close()
-				if err == nil {
-					err = closeErr 
-				}
-			}()
-		} else {
-			// Handle other potential errors (e.g., permission denied)
-			log.Fatalf("Error opening file: %v\n", err)
-			return nil, err
-		}
-	}
 	defer func() {
 		closeErr := file.Close()
 		if err == nil {
 			err = closeErr // Capture close error if no other error occurred
 		}
 	}()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Printf("File not found: %s\n", configFileName)
+			log.Printf("Creating a new config file, add the dump and destinations")
+			// Handle file not existing (e.g., create it, exit)
+			newConfigFile, err := os.Create(configFileName)
+			defer func() {
+				closeErr := newConfigFile.Close()
+				if err == nil {
+					err = closeErr 
+				}
+			}()
+			if err != nil {
+				log.Fatalf("Error create new config file %e:", err)
+				return nil, err
+			}
+
+		
+		} else {
+			log.Fatalf("Error opening file: %v\n", err)
+			return nil, err
+		}
+	}
+
 
 	log.Printf("File exists and opened successfully: %s\n", configFileName)
 
@@ -129,10 +132,6 @@ func moveFile(sourcePath, destPath string) error {
 
 func copyFile(sourcePath, destPath string) error {
 	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		log.Printf("failed to open source file: %v", err)
-		return fmt.Errorf("failed to open source file: %w", err)
-	}
 	defer func() {
 		closeErr := sourceFile.Close()
 		if err == nil {
@@ -140,11 +139,12 @@ func copyFile(sourcePath, destPath string) error {
 			err = closeErr
 		}
 	}()
-	destFile, err := os.Create(destPath)
 	if err != nil {
-		log.Printf("failed to create destination file: %v", err)
-		return fmt.Errorf("failed to create destination file: %w", err)
+		log.Printf("failed to open source file: %v", err)
+		return fmt.Errorf("failed to open source file: %w", err)
 	}
+
+	destFile, err := os.Create(destPath)
 	defer func() {
 		closeErr := destFile.Close()
 		if err == nil {
@@ -152,6 +152,11 @@ func copyFile(sourcePath, destPath string) error {
 			err = closeErr
 		}
 	}()
+	if err != nil {
+		log.Printf("failed to create destination file: %v", err)
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
 		return err
@@ -242,7 +247,10 @@ func main() {
 	log.Printf("Dump directory: %s", config.DumpDirectory)
 	log.Printf("Processing %d destination rules", len(config.Destinations))
 
-	watcher, _ := fsnotify.NewWatcher()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalf("Failed to create watcher: %v", err)
+	}
 	defer func() {
 		closeErr := watcher.Close()
 		if err == nil {
@@ -287,5 +295,22 @@ func main() {
 	if err != nil {
 		log.Println(err)
 	}
-	select {}
+
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	log.Println("File organizer started. Press Ctrl+C to stop.")
+	
+	// Wait for interrupt signal
+	sig := <-sigChan
+	log.Printf("Received signal: %v. Shutting down gracefully...", sig)
+	
+	// Stop the timer if it's running
+	if timer != nil {
+		timer.Stop()
+		log.Println("Stopped file organization timer")
+	}
+	
+	log.Println("File organizer stopped")
 }
