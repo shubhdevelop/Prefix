@@ -8,10 +8,10 @@
 class Prefix < Formula
   desc "Automatically organizes files from a dump directory based on filename patterns"
   homepage "https://github.com/shubhdevelop/prefix"
-  # TODO: Replace v1.0.0 with the actual version tag
-  url "https://github.com/shubhdevelop/prefix/archive/refs/tags/v1.0.0.tar.gz"
-  # TODO: Replace with actual SHA256 checksum from the release
-  sha256 "YOUR_SHA256_CHECKSUM_HERE"
+  
+  url "https://github.com/shubhdevelop/prefix/archive/refs/tags/v0.1.1.tar.gz"
+  
+  sha256 "096427867078e3effd52f6ab82efd53de4124c32aabc1ee8e430470debed89ff"
   license "MIT"
   head "https://github.com/shubhdevelop/prefix.git", branch: "main"
 
