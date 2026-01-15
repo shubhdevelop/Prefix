@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build macOS binaries
+    name: Build binaries
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -28,6 +28,16 @@ jobs:
             goos: darwin
             goarch: arm64
             output: prefix-macos-arm64
+
+          - arch: amd64
+            goos: linux
+            goarch: amd64
+            output: prefix-linux-amd64
+
+          - arch: arm64
+            goos: linux
+            goarch: arm64
+            output: prefix-linux-arm64
 
     steps:
       - name: Checkout code
