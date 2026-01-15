@@ -9,9 +9,9 @@ class Prefix < Formula
   desc "Automatically organizes files from a dump directory based on filename patterns"
   homepage "https://github.com/shubhdevelop/prefix"
   
-  url "https://github.com/shubhdevelop/prefix/archive/refs/tags/v0.1.1.tar.gz"
+  url "https://github.com/shubhdevelop/prefix/archive/refs/tags/v0.1.2.tar.gz"
   
-  sha256 "096427867078e3effd52f6ab82efd53de4124c32aabc1ee8e430470debed89ff"
+  sha256 "261324e28cfc3595dfbb2a6a47622c35820c363dfb2a7d74112e97b1e5e318e3"
   license "MIT"
   head "https://github.com/shubhdevelop/prefix.git", branch: "main"
 
